@@ -7,14 +7,19 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(name = "empleados")
+@Table(name = "empleados",
+        uniqueConstraints = @UniqueConstraint(name = EmpleadoEntity.RESTRICCION_LEGAJO_UNICO, columnNames = "legajo"))
 public class EmpleadoEntity {
+
+    // Nombre de la restriccion UNIQUE del legajo. Se usa para reconocerla cuando la base rechaza un alta.
+    public static final String RESTRICCION_LEGAJO_UNICO = "uk_empleado_legajo";
 
     @Id
     private UUID id;
@@ -22,7 +27,7 @@ public class EmpleadoEntity {
     @Column(name = "nombre_completo", nullable = false)
     private String nombreCompleto;
 
-    @Column(nullable = false, unique = true, length = 7)
+    @Column(nullable = false, length = 7)
     private String legajo;
 
     @Column(name = "fecha_ingreso", nullable = false)
