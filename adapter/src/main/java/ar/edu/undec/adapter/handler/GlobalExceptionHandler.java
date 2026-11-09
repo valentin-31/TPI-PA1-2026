@@ -7,6 +7,8 @@ import empleado.exception.FechaIngresoInvalidaException;
 import empleado.exception.LegajoInvalidoException;
 import empleado.exception.SalarioInferiorAlMinimoException;
 import empleado.exception.SalarioInvalidoException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -21,9 +23,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *   JSON que no se puede leer    -> 400 Bad Request
  *   Empleado no encontrado       -> 404 Not Found
  *   Legajo duplicado             -> 409 Conflict
+ *   Errores propios de Spring    -> su propio codigo (415, 405, 404 de ruta inexistente...)
+ *   Cualquier otro error         -> 500 Internal Server Error, con mensaje generico
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // 400: el pedido trae datos que violan las reglas del dominio
     @ExceptionHandler({
@@ -55,5 +61,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmpleadoExisteException.class)
     public ResponseEntity<ErrorResponse> manejarDuplicado(EmpleadoExisteException excepcion) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(excepcion.getMessage()));
+    }
+
+    // Red de seguridad: atiende cualquier excepcion que no haya atendido un metodo mas especifico
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> manejarErrorNoPrevisto(Exception excepcion) {
+        // Errores propios de Spring (415, 405, 404 de ruta inexistente...): ya traen su codigo correcto.
+        // Se respeta ese codigo y solo se le da el formato {"mensaje"}.
+        if (excepcion instanceof org.springframework.web.ErrorResponse errorDeSpring) {
+            String detalle = errorDeSpring.getBody().getDetail();
+            String mensaje = (detalle != null) ? detalle : "No se pudo procesar el pedido";
+            return ResponseEntity.status(errorDeSpring.getStatusCode()).body(new ErrorResponse(mensaje));
+        }
+
+        // Error inesperado de verdad: el detalle queda en el log del servidor
+        // y al cliente se le responde un mensaje generico, sin exponer SQL ni datos internos.
+        log.error("Error no previsto al procesar el pedido", excepcion);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ErrorResponse("Error interno del servidor"));
     }
 }
