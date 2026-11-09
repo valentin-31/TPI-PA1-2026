@@ -50,6 +50,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *  - 400 JSON que no se puede leer   -> crear_puestoInexistente_...
  *  - 409 legajo duplicado            -> crear_legajoExistente_...
  *  - 404 legajo inexistente          -> buscar_legajoInexistente_...
+ *  - 500 error inesperado            -> crear_errorInesperado_... (mensaje generico, sin detalles internos)
+ *  - 415 errores propios de Spring   -> crear_contentTypeNoJson_... (conserva su codigo, con formato {"mensaje"})
  */
 @DisplayName("Adaptador web EmpleadoController")
 @WebMvcTest(EmpleadoController.class)
@@ -256,6 +258,29 @@ class EmpleadoControllerTest {
         mockMvc.perform(get("/empleados/ZZZ9999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.mensaje").value("No existe un empleado con el legajo ZZZ9999"));
+    }
+
+    // ---------- Errores no previstos ----------
+
+    @Test
+    @DisplayName("POST /empleados responde 500 con un mensaje generico ante un error inesperado")
+    void crear_errorInesperado_responde500ConMensajeGenerico() throws Exception {
+        // El mensaje interno simula un error de base de datos: NO debe llegarle al cliente
+        when(crearEmpleadoInput.crear(any(), any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("could not execute statement [insert into empleados ...]"));
+
+        mockMvc.perform(post("/empleados").contentType(MediaType.APPLICATION_JSON).content(JSON_FARRE))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.mensaje").value("Error interno del servidor"));
+    }
+
+    @Test
+    @DisplayName("POST /empleados sin Content-Type JSON responde 415 (error propio de Spring) con formato {mensaje}")
+    void crear_contentTypeNoJson_responde415ConMensaje() throws Exception {
+        // No se programa el mock: Spring rechaza el pedido antes de llegar al controller
+        mockMvc.perform(post("/empleados").contentType(MediaType.TEXT_PLAIN).content(JSON_FARRE))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.mensaje").exists());
     }
 
     // JSON valido reutilizado en los tests de error: el error lo provoca el mock, no el JSON
