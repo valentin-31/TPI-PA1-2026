@@ -1,6 +1,7 @@
 package ar.edu.undec.adapter.data.empleado;
 
 import ar.edu.undec.adapter.data.empleado.repoimplementacion.EmpleadoRepoImpl;
+import empleado.exception.EmpleadoExisteException;
 import empleado.modelo.Empleado;
 import empleado.modelo.Puesto;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +19,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /*
@@ -25,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * No hay mocks: se guarda y se lee de verdad en una base H2 en memoria.
  *
  * Metodos del puerto EmpleadoRepositorio y tests que los cubren:
- *  - guardar          -> guardar_empleadoValido_...
+ *  - guardar          -> guardar_empleadoValido_..., guardar_legajoYaGuardadoConOtroId_...
  *  - buscarPorLegajo  -> buscarPorLegajo_legajoGuardado_..., buscarPorLegajo_legajoInexistente_...
  *  - existePorLegajo  -> existePorLegajo_legajoGuardado_..., existePorLegajo_legajoInexistente_...
  *  - buscarTodos      -> buscarTodos_conDosEmpleadosGuardados_..., buscarTodos_sinEmpleados_...
@@ -59,6 +61,21 @@ class EmpleadoRepoImplTest {
 
         // Assert
         verificarMismosDatos(farre, guardado);
+    }
+
+    @Test
+    @DisplayName("Lanza EmpleadoExisteException si la base rechaza el legajo por duplicado (altas simultaneas)")
+    void guardar_legajoYaGuardadoConOtroId_lanzaEmpleadoExisteException() {
+        // Arrange: simula dos altas simultaneas. Las dos pasaron el "existePorLegajo" del caso de uso
+        // antes de que la otra guardara, asi que llegan las dos al repositorio con el mismo legajo.
+        empleadoRepoImpl.guardar(farre);
+        Empleado otroConElMismoLegajo = Empleado.instancia(
+                UUID.fromString("323e4567-e89b-12d3-a456-426614174000"),
+                "Juan Carlos Olave", "ABC1234", LocalDate.of(2011, 6, 26), Puesto.GERENTE, new BigDecimal("1500000"));
+
+        // Act - Assert: la restriccion UNIQUE de la base lo frena y el adaptador lo traduce a la excepcion del dominio
+        assertThrows(EmpleadoExisteException.class,
+                () -> empleadoRepoImpl.guardar(otroConElMismoLegajo));
     }
 
     // ---------- buscarPorLegajo ----------
